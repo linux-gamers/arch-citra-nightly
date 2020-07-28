@@ -4,6 +4,7 @@ ARG TAG
 ARG GIT_USER
 ARG GIT_EMAIL 
 ARG GITHUB_TOKEN
+ARG AUR_SSH_KEY
 
 RUN useradd -ms /bin/bash linuxgamers
 
@@ -15,7 +16,7 @@ WORKDIR /home/linuxgamers/citra-nightly
 
 RUN git checkout -b "${TAG}" && mkdir build && cd build && \
 	cmake .. -DENABLE_FFMPEG_AUDIO_DECODER=ON && \
-	make -j4
+	make -j6
 
 WORKDIR /home/linuxgamers
 
@@ -39,3 +40,24 @@ RUN curl -X POST -H "Content-Type: application/json" -d "{ \
   		\"draft\": false, \
   		\"prerelease\": false \
 	}" https://${GITHUB_TOKEN}@api.github.com/repos/linux-gamers/arch-citra-nightly/releases
+
+
+RUN mkdir -p ~/.ssh && \
+	echo "${AUR_SSH_KEY}" | tr -d '\r' > ~/.ssh/id_rsa && chmod 700 ~/.ssh/id_rsa && \
+	ssh-keyscan -H 'aur.archlinux.org' >> ~/.ssh/known_hosts && \
+	eval "$(ssh-agent -s)" && \
+	ssh-add ~/.ssh/id_rsa && \
+	git clone ssh://aur@aur.archlinux.org/citra-nightly.git ~/citra-nightly-aur
+
+WORKDIR /home/linuxgamers/citra-nightly-aur
+
+RUN git config user.name "${GIT_USER}" && git config user.email "${GIT_EMAIL}" && \
+	wget "https://github.com/linux-gamers/arch-citra-nightly/archive/${TAG}.tar.gz" && \
+	VERSION=$(echo ${TAG} | cut -d- -f2) && \
+	sed -i -E "s/pkgver=.+/pkgver=${VERSION}/" PKGBUILD && \
+	SHA=$(sha512sum ${TAG}.tar.gz | grep -Eo "(\w+)\s" | cut -d" " -f1)  && \
+	sed -i -E "s/sha512sums=.+/sha512sums=\(\'${SHA}\'\)/" PKGBUILD && \
+	./gensrc.sh && \
+	makepkg -Acsmf && \
+	git commit -am "${TAG}" && \
+	git push 
