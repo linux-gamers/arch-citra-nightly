@@ -58,6 +58,5 @@ RUN git config user.name "${GIT_USER}" && git config user.email "${GIT_EMAIL}" &
 	SHA=$(sha512sum ${TAG}.tar.gz | grep -Eo "(\w+)\s" | cut -d" " -f1)  && \
 	sed -i -E "s/sha512sums=.+/sha512sums=\(\'${SHA}\'\)/" PKGBUILD && \
 	./gensrc.sh && \
-	makepkg -Acsmf && \
 	git commit -am "${TAG}" && \
 	git push 
